@@ -166,8 +166,121 @@
           <div class="chunk-list" id="today-chunks-container"></div>
         </div>
 
-        <!-- Right Column: Integrated Focus Timer + Recurring Habits & Checklists -->
+        <!-- Right Column: Prominent Checklist & Habits (Top) + Integrated Focus Timer -->
         <div class="side-stack">
+
+          <!-- Prominent Side Checklist & Recurring Habits Card (Placed at Top of Right Column) -->
+          <div class="section-card checklist-prominent-card">
+            <div class="section-header" style="margin-bottom: 14px;">
+              <div>
+                <div class="section-title-group">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                  <h2 class="section-title">Side Checklist &amp; Habits</h2>
+                  <span class="count-pill" id="habits-progress-pill">0/0</span>
+                </div>
+                <p style="font-size: 12.5px; color: var(--text-secondary); margin-top: 3px;">
+                  No-duration items stay here as a quick checklist (in cycles or timeless); timed habits schedule into your task sessions.
+                </p>
+              </div>
+              <button type="button" class="btn btn-sm btn-primary" id="btn-toggle-add-habit">+ Add Item / Habit</button>
+            </div>
+
+            <!-- Inline Add / Edit Habit Drawer -->
+            <form id="form-add-habit" style="display: none; margin-bottom: 18px; padding: 16px; background: var(--bg-elevated); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+              <input type="hidden" id="habit-edit-id" value="" />
+              <div class="form-group" style="margin-bottom: 12px;">
+                <label class="form-label" for="habit-title-input">Title</label>
+                <input type="text" id="habit-title-input" class="form-input" placeholder="e.g., Check Course Announcements or Review Lecture Notes" required />
+              </div>
+
+              <!-- 2-Option Mode Toggle: No Time Duration (Side Checklist Only) vs. Has Time Duration (Scheduled Task) -->
+              <div class="form-group" style="margin-bottom: 12px;">
+                <label class="form-label">Time Duration Option</label>
+                <input type="hidden" id="habit-has-duration-input" value="false" />
+                <div class="habit-duration-mode-grid" role="group" aria-label="Habit Time Duration Mode">
+                  <button type="button" class="habit-mode-card active" data-has-duration="false" id="btn-habit-mode-checklist">
+                    <span class="habit-mode-title">☑ No Time Duration</span>
+                    <span class="habit-mode-sub">Shows in side checklist only (not in tasks)</span>
+                  </button>
+                  <button type="button" class="habit-mode-card" data-has-duration="true" id="btn-habit-mode-timed">
+                    <span class="habit-mode-title">⏱ Has Time Duration</span>
+                    <span class="habit-mode-sub">Creates scheduled task sessions</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-grid" style="margin-bottom: 12px;">
+                <div class="form-group">
+                  <label class="form-label" for="habit-freq-input">Cycle Schedule</label>
+                  <select id="habit-freq-input" class="form-select">
+                    <option value="daily">Daily Cycle</option>
+                    <option value="weekly">Weekly Cycle (Pick Days)</option>
+                    <option value="monthly">Monthly Cycle</option>
+                    <option value="custom">Custom Cycle (Every N Days)</option>
+                    <option value="timeless" id="habit-freq-opt-timeless">Not in a Cycle (One-Off / Timeless)</option>
+                  </select>
+                </div>
+                <div class="form-group" id="habit-duration-wrap" style="display: none;">
+                  <label class="form-label" for="habit-duration-input">Duration (mins)</label>
+                  <input type="number" id="habit-duration-input" class="form-input mono" value="30" min="5" max="240" step="5" />
+                </div>
+              </div>
+
+              <div class="form-grid" id="habit-cycle-options-row" style="margin-bottom: 12px;">
+                <div class="form-group" id="habit-interval-wrap">
+                  <label class="form-label" for="habit-interval-input" id="habit-interval-label">Every N Days</label>
+                  <input type="number" id="habit-interval-input" class="form-input mono" value="1" min="1" max="365" />
+                </div>
+                <div class="form-group" id="habit-dom-wrap" style="display: none;">
+                  <label class="form-label" for="habit-dom-input">Day of Month</label>
+                  <input type="number" id="habit-dom-input" class="form-input mono" value="1" min="1" max="31" />
+                </div>
+              </div>
+
+              <div class="form-group" id="habit-weekdays-wrap" style="display: none; margin-bottom: 12px;">
+                <label class="form-label">Days of Week</label>
+                <div id="habit-weekdays-picker" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="1" checked /> Mon</label>
+                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="2" /> Tue</label>
+                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="3" /> Wed</label>
+                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="4" /> Thu</label>
+                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="5" /> Fri</label>
+                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="6" /> Sat</label>
+                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="0" /> Sun</label>
+                </div>
+              </div>
+
+              <div class="form-grid" id="habit-task-meta-row" style="margin-bottom: 12px;">
+                <div class="form-group">
+                  <label class="form-label" for="habit-project-input">Section / Type</label>
+                  <select id="habit-project-input" class="form-select"></select>
+                </div>
+                <div class="form-group" id="habit-priority-wrap">
+                  <label class="form-label" for="habit-priority-input">Priority</label>
+                  <select id="habit-priority-input" class="form-select">
+                    <option value="P1">P1 Critical</option>
+                    <option value="P2" selected>P2 High</option>
+                    <option value="P3">P3 Medium</option>
+                    <option value="P4">P4 Low</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                <button type="button" class="btn btn-xs btn-ghost" id="btn-cancel-habit">Cancel</button>
+                <button type="submit" class="btn btn-xs btn-primary">Save</button>
+              </div>
+            </form>
+
+            <!-- Prominent Filter Tabs: Checklist (No Duration) vs Timed Habits vs Cycle Filters -->
+            <div class="habit-tabs" role="tablist" style="flex-wrap: wrap;">
+              <button type="button" class="habit-tab active" data-freq="checklist">☑ Checklist (No Time)</button>
+              <button type="button" class="habit-tab" data-freq="timed">⏱ Timed Habits</button>
+              <button type="button" class="habit-tab" data-freq="all">All</button>
+            </div>
+
+            <div class="habit-list" id="habits-list-container"></div>
+          </div>
 
           <!-- Focus Timer Card -->
           <div class="focus-panel" id="focus-timer-panel">
@@ -201,104 +314,6 @@
                 Finish &amp; Log
               </button>
             </div>
-          </div>
-
-          <!-- Recurring Habits & Checklists Card -->
-          <div class="section-card">
-            <div class="section-header" style="margin-bottom: 14px;">
-              <div class="section-title-group">
-                <h2 class="section-title">Habits &amp; Checklists</h2>
-                <span class="count-pill" id="habits-progress-pill">0/0</span>
-              </div>
-              <button type="button" class="btn btn-xs btn-secondary" id="btn-toggle-add-habit">+ Add Habit / Item</button>
-            </div>
-
-            <!-- Inline Add / Edit Habit Drawer -->
-            <form id="form-add-habit" style="display: none; margin-bottom: 18px; padding: 16px; background: var(--bg-elevated); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-              <input type="hidden" id="habit-edit-id" value="" />
-              <div class="form-group" style="margin-bottom: 12px;">
-                <label class="form-label" for="habit-title-input">Title</label>
-                <input type="text" id="habit-title-input" class="form-input" placeholder="e.g., Review Lecture Notes" required />
-              </div>
-              <div class="form-grid" style="margin-bottom: 12px;">
-                <div class="form-group">
-                  <label class="form-label" for="habit-freq-input">Cycle Type</label>
-                  <select id="habit-freq-input" class="form-select">
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly (Pick Days)</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="custom">Custom (Every N Days)</option>
-                    <option value="timeless">Timeless Checklist</option>
-                  </select>
-                </div>
-                <div class="form-group" id="habit-duration-wrap">
-                  <label class="form-label" for="habit-duration-input">Duration (mins)</label>
-                  <input type="number" id="habit-duration-input" class="form-input mono" value="30" min="5" max="240" step="5" required />
-                </div>
-              </div>
-
-              <div class="form-grid" id="habit-cycle-options-row" style="margin-bottom: 12px;">
-                <div class="form-group" id="habit-interval-wrap">
-                  <label class="form-label" for="habit-interval-input" id="habit-interval-label">Every N Days</label>
-                  <input type="number" id="habit-interval-input" class="form-input mono" value="1" min="1" max="365" />
-                </div>
-                <div class="form-group" id="habit-dom-wrap" style="display: none;">
-                  <label class="form-label" for="habit-dom-input">Day of Month</label>
-                  <input type="number" id="habit-dom-input" class="form-input mono" value="1" min="1" max="31" />
-                </div>
-              </div>
-
-              <div class="form-group" id="habit-weekdays-wrap" style="display: none; margin-bottom: 12px;">
-                <label class="form-label">Days of Week</label>
-                <div id="habit-weekdays-picker" style="display: flex; gap: 6px; flex-wrap: wrap;">
-                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="1" checked /> Mon</label>
-                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="2" /> Tue</label>
-                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="3" /> Wed</label>
-                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="4" /> Thu</label>
-                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="5" /> Fri</label>
-                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="6" /> Sat</label>
-                  <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer;"><input type="checkbox" value="0" /> Sun</label>
-                </div>
-              </div>
-
-              <div class="form-grid" id="habit-task-meta-row" style="margin-bottom: 12px;">
-                <div class="form-group">
-                  <label class="form-label" for="habit-project-input">Section / Type</label>
-                  <select id="habit-project-input" class="form-select"></select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label" for="habit-priority-input">Priority</label>
-                  <select id="habit-priority-input" class="form-select">
-                    <option value="P1">P1 Critical</option>
-                    <option value="P2" selected>P2 High</option>
-                    <option value="P3">P3 Medium</option>
-                    <option value="P4">P4 Low</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
-                <label id="habit-consumes-wrap" style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
-                  <input type="checkbox" id="habit-consumes-input" checked style="accent-color: var(--accent-primary);" />
-                  Create scheduled task sessions
-                </label>
-                <div style="display: flex; gap: 8px;">
-                  <button type="button" class="btn btn-xs btn-ghost" id="btn-cancel-habit">Cancel</button>
-                  <button type="submit" class="btn btn-xs btn-primary">Save</button>
-                </div>
-              </div>
-            </form>
-
-            <!-- Frequency Tabs -->
-            <div class="habit-tabs" role="tablist" style="flex-wrap: wrap;">
-              <button type="button" class="habit-tab active" data-freq="daily">Daily</button>
-              <button type="button" class="habit-tab" data-freq="weekly">Weekly</button>
-              <button type="button" class="habit-tab" data-freq="monthly">Monthly</button>
-              <button type="button" class="habit-tab" data-freq="custom">Custom</button>
-              <button type="button" class="habit-tab" data-freq="timeless">Checklist</button>
-            </div>
-
-            <div class="habit-list" id="habits-list-container"></div>
           </div>
 
         </div>
@@ -459,6 +474,49 @@
           <span class="kpi-label">Consistency Streak</span>
           <span class="kpi-value" id="kpi-streak-val">1d streak</span>
           <span class="kpi-sub" id="kpi-streak-sub">0.0h total logged focus</span>
+        </div>
+      </div>
+
+      <!-- GitHub-Style Daily Working Hours Activity Heatmap -->
+      <div class="section-card heatmap-card">
+        <div class="section-header" style="margin-bottom: 14px;">
+          <div>
+            <h2 class="section-title">Daily Focus Activity</h2>
+            <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 2px;">
+              Hours spent working each day — square brightness reflects daily logged hours
+            </p>
+          </div>
+          <div class="heatmap-summary-pills">
+            <span class="count-pill" id="heatmap-active-days-pill">0 active days</span>
+            <span class="count-pill" id="heatmap-total-hours-pill">0.0h logged</span>
+          </div>
+        </div>
+
+        <div class="heatmap-scroll-wrap">
+          <div class="heatmap-months-row" id="stats-heatmap-months"></div>
+          <div class="heatmap-body">
+            <div class="heatmap-weekdays" aria-hidden="true">
+              <span>Mon</span>
+              <span>Wed</span>
+              <span>Fri</span>
+            </div>
+            <div class="heatmap-weeks-grid" id="stats-activity-heatmap" role="grid" aria-label="Daily working hours activity heatmap"></div>
+          </div>
+        </div>
+
+        <div class="heatmap-footer">
+          <div class="heatmap-selected-readout mono" id="heatmap-hover-readout">
+            Hover over a square to inspect daily hours logged
+          </div>
+          <div class="heatmap-legend" aria-label="Hours intensity legend">
+            <span>Less (0h)</span>
+            <i class="heatmap-cell level-0" title="0h"></i>
+            <i class="heatmap-cell level-1" title="0.1h – 1.5h"></i>
+            <i class="heatmap-cell level-2" title="1.5h – 3.0h"></i>
+            <i class="heatmap-cell level-3" title="3.0h – 4.5h"></i>
+            <i class="heatmap-cell level-4" title="4.5h+"></i>
+            <span>More (4.5h+)</span>
+          </div>
         </div>
       </div>
 

@@ -189,11 +189,67 @@ function openEditChunkModal(chunkId) {
   const isHab = isChunkHabit(chunk);
   document.getElementById('edit-chunk-id').value = chunk.id;
   document.getElementById('edit-chunk-task-label').textContent = task
-    ? `${isHab ? '🔁 Habit • ' : ''}${task.priority} • ${task.title}${!isHab ? ` (Session ${chunk.chunkIndex} of ${chunk.totalChunks})` : ''}`
+    ? `${isHab ? '🔁 Habit Session • ' : ''}${task.priority} • ${task.title}${!isHab ? ` (Session ${chunk.chunkIndex} of ${chunk.totalChunks})` : ` (${formatHumanDate(chunk.date)})`}`
     : 'Scheduled Session';
   document.getElementById('edit-chunk-date').value = chunk.date;
   document.getElementById('edit-chunk-duration').value = chunk.durationHours;
+
+  const openTaskBtn = document.getElementById('btn-edit-chunk-open-task');
+  if (openTaskBtn) {
+    openTaskBtn.textContent = isHab ? 'Edit Habit Cycle' : 'Edit Parent Task';
+  }
+  const deleteParentBtn = document.getElementById('btn-edit-chunk-delete-task');
+  if (deleteParentBtn) {
+    deleteParentBtn.textContent = isHab ? 'Delete Entire Habit' : 'Delete Task';
+  }
+  const addDepBtn = document.getElementById('btn-edit-chunk-add-dependent');
+  if (addDepBtn) {
+    addDepBtn.style.display = isHab ? 'none' : 'inline-flex';
+  }
+  const deleteChunkBtn = document.getElementById('btn-delete-chunk-only');
+  if (deleteChunkBtn) {
+    deleteChunkBtn.textContent = isHab ? 'Delete This Session Only' : 'Delete Session';
+  }
+
   openModal('modal-edit-chunk');
+}
+
+function deleteSingleChunkById(chunkId) {
+  const chunk = state.chunks.find((c) => c.id === chunkId);
+  if (!chunk) return;
+  const task = state.tasks.find((t) => t.id === chunk.taskId);
+  const isHab = isChunkHabit(chunk);
+
+  if (timerState.activeChunkId === chunkId) {
+    resetTimer();
+    timerState.activeChunkId = null;
+  }
+
+  if (isHab) {
+    const habId = chunk.habitId || (task && task.habitId);
+    const habit = state.habits.find((h) => h.id === habId);
+    if (habit) {
+      if (!habit.skippedDates || typeof habit.skippedDates !== 'object') {
+        habit.skippedDates = {};
+      }
+      habit.skippedDates[chunk.date] = true;
+      if (chunk.originalCycleDate) {
+        habit.skippedDates[chunk.originalCycleDate] = true;
+      }
+    }
+  } else if (task && chunk.status !== 'completed') {
+    task.remainingHours = Math.max(0, roundTwo(task.remainingHours - chunk.durationHours));
+    if (task.remainingHours <= 0) task.completed = true;
+  }
+
+  state.chunks = state.chunks.filter((c) => c.id !== chunkId);
+  runChunkingEngine();
+  renderAll();
+  showToast(
+    isHab
+      ? `Removed "${task ? task.title : 'Habit'}" session on ${formatHumanDate(chunk.date)}.`
+      : 'Session removed.'
+  );
 }
 
 function openCheckInModal(chunkId, openedFromTimer = false) {

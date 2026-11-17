@@ -8,8 +8,18 @@ function isHabitTimeless(habit) {
   return !habit || habit.frequency === 'timeless';
 }
 
+/**
+ * Returns true if the habit has a time duration (becomes an actual scheduled task).
+ * Returns false if the habit has NO time duration (lives in the side checklist only, never in tasks).
+ */
+function habitHasDuration(habit) {
+  if (!habit) return false;
+  if (typeof habit.hasDuration === 'boolean') return habit.hasDuration;
+  return Boolean(habit.consumesCapacity && habit.frequency !== 'timeless');
+}
+
 function isHabitScheduled(habit) {
-  return Boolean(habit && habit.consumesCapacity && habit.frequency !== 'timeless');
+  return Boolean(habit && habitHasDuration(habit) && habit.frequency !== 'timeless');
 }
 
 function getHabitTaskId(habitId) {
@@ -22,6 +32,7 @@ function isHabitTask(task) {
 
 function isHabitScheduledOnDate(habit, dateStr) {
   if (!habit || habit.frequency === 'timeless') return false;
+  if (habit.skippedDates && habit.skippedDates[dateStr]) return false;
   const anchor = habit.anchorDate || getTodayStr();
   if (dateStr < anchor && dateStr !== getTodayStr()) {
     // Allow dates on or after today even if anchorDate was set to today
@@ -90,7 +101,7 @@ function getHabitPeriodKey(habitOrFreq, dateStr = getTodayStr()) {
   if (h.frequency === 'timeless') return 'timeless';
   if (h.frequency === 'daily' || h.frequency === 'custom') return dateStr;
   if (h.frequency === 'weekly') {
-    if (h.consumesCapacity && Array.isArray(h.daysOfWeek) && h.daysOfWeek.length > 1) {
+    if (Array.isArray(h.daysOfWeek) && h.daysOfWeek.length > 1) {
       return dateStr;
     }
     return `week_${getMondayOfWeek(dateStr)}`;
@@ -106,10 +117,10 @@ function getHabitCycleSummary(habit) {
   if (!habit) return '';
   const interval = Math.max(1, Number(habit.intervalCount) || 1);
   if (habit.frequency === 'timeless') {
-    return 'Timeless Checklist';
+    return 'No cycle (One-off / Timeless)';
   }
   if (habit.frequency === 'daily') {
-    return interval === 1 ? 'Every day' : `Every ${interval} days`;
+    return interval === 1 ? 'Daily cycle' : `Every ${interval} days`;
   }
   if (habit.frequency === 'custom') {
     return `Every ${interval} day${interval === 1 ? '' : 's'}`;
@@ -124,7 +135,7 @@ function getHabitCycleSummary(habit) {
     const dom = Math.max(1, Math.min(31, Number(habit.dayOfMonth) || 1));
     return interval === 1 ? `Monthly (Day ${dom})` : `Every ${interval}mo (Day ${dom})`;
   }
-  return habit.frequency || 'Daily';
+  return habit.frequency || 'Daily cycle';
 }
 
 function ensureHabitBackingTask(habit) {
@@ -147,7 +158,7 @@ function ensureHabitBackingTask(habit) {
       bufferDays: 0,
       minSessionMins: Number(habit.durationMins) || 30,
       maxSessionMins: Number(habit.durationMins) || 30,
-      notes: `${getHabitCycleSummary(habit)} • Recurring Habit`,
+      notes: `${getHabitCycleSummary(habit)} • Timed Habit`,
       completed: false,
       isHabitTask: true,
       taskType: 'habit',
@@ -170,8 +181,8 @@ function ensureHabitBackingTask(habit) {
     task.isHabitTask = true;
     task.taskType = 'habit';
     task.habitId = habit.id;
-    if (!task.notes || task.notes.includes('Recurring Habit')) {
-      task.notes = `${getHabitCycleSummary(habit)} • Recurring Habit`;
+    if (!task.notes || task.notes.includes('Habit')) {
+      task.notes = `${getHabitCycleSummary(habit)} • Timed Habit`;
     }
   }
   return task;
@@ -182,7 +193,7 @@ function syncHabitTasksWithState() {
     state.habits.filter((h) => isHabitScheduled(h)).map((h) => h.id)
   );
 
-  // Remove backing tasks only for habits that were deleted or switched to passive checklist
+  // Remove backing tasks for any habit without a time duration or that was deleted
   state.tasks = state.tasks.filter((t) => {
     if (!isHabitTask(t)) return true;
     return activeScheduledHabitIds.has(t.habitId);

@@ -250,7 +250,9 @@ function runChunkingEngine() {
       if (!isHabitScheduledOnDate(h, dStr)) continue;
 
       const existingOnDay = preservedChunks.some(
-        (c) => c.taskId === habitTask.id && c.date === dStr
+        (c) =>
+          c.taskId === habitTask.id &&
+          (c.date === dStr || c.originalCycleDate === dStr)
       );
       if (existingOnDay) continue;
 

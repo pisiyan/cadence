@@ -353,9 +353,9 @@ function renderTodayView() {
                 class="btn btn-xs btn-secondary mono"
                 data-action="open-edit-chunk"
                 data-chunk-id="${ch.id}"
-                title="Click to manually edit this session's duration or date"
+                title="Click to move this session to another date or edit its duration"
               >
-                ${formatMinutesOrHours(ch.durationHours)} ✎
+                ${formatMinutesOrHours(ch.durationHours)} ${isHab ? '• Move / Edit' : '✎'}
               </button>
               ${
                 !isCompleted
@@ -397,13 +397,24 @@ function renderTodayView() {
                 class="btn btn-xs btn-ghost"
                 data-action="${isHab && habit ? 'edit-habit' : 'edit-task'}"
                 ${isHab && habit ? `data-habit-id="${habit.id}"` : `data-task-id="${task.id}"`}
-                title="Edit"
+                title="${isHab ? 'Edit habit cycle settings' : 'Edit task'}"
               >
-                Edit
+                ${isHab ? 'Cycle' : 'Edit'}
               </button>
               ${
-                !isHab
+                isHab
                   ? `
+                <button
+                  type="button"
+                  class="btn btn-xs btn-danger-ghost"
+                  data-action="delete-chunk-only"
+                  data-chunk-id="${ch.id}"
+                  title="Delete only this scheduled habit session"
+                >
+                  Skip Session
+                </button>
+              `
+                  : `
                 <button
                   type="button"
                   class="btn btn-xs btn-danger-ghost"
@@ -414,7 +425,6 @@ function renderTodayView() {
                   Delete
                 </button>
               `
-                  : ''
               }
             </div>
           </article>
@@ -427,17 +437,19 @@ function renderTodayView() {
 }
 
 function renderHabitsPanel() {
-  const freq = state.activeHabitTab || 'daily';
+  const tab = ['checklist', 'timed', 'all'].includes(state.activeHabitTab)
+    ? state.activeHabitTab
+    : 'checklist';
 
   document.querySelectorAll('.habit-tab').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.freq === freq);
+    btn.classList.toggle('active', btn.dataset.freq === tab);
   });
 
   const filteredHabits = state.habits.filter((h) => {
-    if (freq === 'timeless') {
-      return h.frequency === 'timeless' || !h.consumesCapacity;
-    }
-    return h.frequency === freq;
+    const timed = habitHasDuration(h);
+    if (tab === 'checklist') return !timed;
+    if (tab === 'timed') return timed;
+    return true;
   });
 
   const completedCount = filteredHabits.filter((h) => {
@@ -448,50 +460,51 @@ function renderHabitsPanel() {
 
   const listEl = document.getElementById('habits-list-container');
   if (filteredHabits.length === 0) {
-    const label = freq === 'timeless' ? 'timeless checklist items' : `${freq} habits`;
-    listEl.innerHTML = `<div class="empty-state" style="padding: 24px;">No ${label} yet.</div>`;
+    const label =
+      tab === 'checklist'
+        ? 'side checklist items (no time duration)'
+        : tab === 'timed'
+        ? 'timed habits'
+        : 'habits or checklist items';
+    listEl.innerHTML = `<div class="empty-state" style="padding: 24px;">No ${label} yet. Click <strong>+ Add Item / Habit</strong> above.</div>`;
     return;
   }
 
+  const todayStr = getTodayStr();
   listEl.innerHTML = filteredHabits
     .map((h) => {
       const pk = getHabitPeriodKey(h);
       const isChecked = Boolean(h.completedPeriods && h.completedPeriods[pk]);
-      const hrs = roundTwo((Number(h.durationMins) || 0) / 60);
+      const timed = habitHasDuration(h);
+      const hrs = timed ? roundTwo((Number(h.durationMins) || 30) / 60) : 0;
       const proj = getProjectById(h.projectId);
       const cycleSummary = getHabitCycleSummary(h);
-      const isScheduled = isHabitScheduled(h);
+      const isDueToday = h.frequency === 'timeless' ? !isChecked : isHabitScheduledOnDate(h, todayStr);
 
       return `
-        <div class="habit-item ${isChecked ? 'checked' : ''}">
+        <div class="habit-item ${isChecked ? 'checked' : ''}" style="${!timed && isDueToday && !isChecked ? 'border-left: 3.5px solid var(--accent-primary);' : ''}">
           <label class="habit-left" style="cursor: pointer;">
             <input type="checkbox" class="habit-checkbox" data-action="toggle-habit-check" data-habit-id="${h.id}" ${isChecked ? 'checked' : ''} />
             <div>
               <div class="habit-title">${escapeHtml(h.title)}</div>
               <div style="font-size: 11.5px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;" class="mono">
-                <span>${escapeHtml(cycleSummary)}</span>
-                ${isScheduled ? `<span>• ${h.durationMins}m (${hrs}h)</span>` : ''}
+                <span style="color: ${h.frequency === 'timeless' ? 'var(--text-secondary)' : 'var(--accent-primary)'}; font-weight: 600;">${escapeHtml(cycleSummary)}</span>
+                ${timed ? `<span>• ⏱ ${h.durationMins}m (${hrs}h task)</span>` : `<span>• ☑ Side checklist only</span>`}
                 <span>• <span class="project-dot" style="background: ${proj.color}; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 3px; vertical-align: middle;"></span>${escapeHtml(proj.name)}</span>
               </div>
             </div>
           </label>
           <div class="habit-badges">
-            ${
-              h.frequency !== 'timeless'
-                ? `
-              <button
-                type="button"
-                class="capacity-reserve-toggle ${h.consumesCapacity ? 'consumes' : ''}"
-                data-action="toggle-habit-capacity"
-                data-habit-id="${h.id}"
-                title="Toggle between Scheduled Task (reserves capacity) and Passive Checklist"
-              >
-                ${h.consumesCapacity ? `Task ${hrs}h` : 'Checklist'}
-              </button>
-            `
-                : `<span class="project-pill" style="font-size: 10.5px;">Timeless</span>`
-            }
-            <button type="button" class="btn btn-xs btn-ghost" data-action="edit-habit" data-habit-id="${h.id}" title="Edit habit or checklist item">✎</button>
+            <button
+              type="button"
+              class="capacity-reserve-toggle ${timed ? 'consumes' : ''}"
+              data-action="toggle-habit-capacity"
+              data-habit-id="${h.id}"
+              title="1-click switch between No Time Duration (side checklist only) and Timed Habit (scheduled task sessions)"
+            >
+              ${timed ? `⏱ ${hrs}h Task` : '☑ No Time'}
+            </button>
+            <button type="button" class="btn btn-xs btn-ghost" data-action="edit-habit" data-habit-id="${h.id}" title="Edit">✎</button>
             <button type="button" class="btn btn-xs btn-danger-ghost" data-action="delete-habit" data-habit-id="${h.id}" title="Delete">✕</button>
           </div>
         </div>
@@ -661,7 +674,15 @@ function renderForecastView() {
                     style="border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 11px; padding: 0 2px; line-height: 1;"
                   >✕</button>
                 `
-                    : ''
+                    : `
+                  <button
+                    type="button"
+                    data-action="delete-chunk-only"
+                    data-chunk-id="${ch.id}"
+                    title="Delete only this habit session on ${dStr}"
+                    style="border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 11px; padding: 0 2px; line-height: 1;"
+                  >✕</button>
+                `
                 }
               </span>
             </div>
@@ -933,6 +954,138 @@ function renderProjectFilterChips(containerId) {
 
 // -------------------- 3. RENDER STATS & ANALYTICS VIEW --------------------
 
+function getHeatmapLevel(hours) {
+  const h = Number(hours) || 0;
+  if (h <= 0) return 0;
+  if (h < 1.5) return 1;
+  if (h < 3.0) return 2;
+  if (h < 4.5) return 3;
+  return 4;
+}
+
+function getDailyLoggedBreakdownMap() {
+  const byDate = {};
+
+  for (const ch of state.chunks) {
+    if (ch.status !== 'completed') continue;
+    const hrs = roundTwo(Number(ch.loggedHours ?? ch.durationHours) || 0);
+    if (hrs <= 0) continue;
+    if (!byDate[ch.date]) {
+      byDate[ch.date] = { chunkHours: 0, logHours: 0, sessions: 0 };
+    }
+    byDate[ch.date].chunkHours = roundTwo(byDate[ch.date].chunkHours + hrs);
+    byDate[ch.date].sessions += 1;
+  }
+
+  for (const log of state.logs || []) {
+    const hrs = roundTwo(Number(log.loggedHours) || 0);
+    if (hrs <= 0 || !log.date) continue;
+    if (!byDate[log.date]) {
+      byDate[log.date] = { chunkHours: 0, logHours: 0, sessions: 0 };
+    }
+    byDate[log.date].logHours = roundTwo(byDate[log.date].logHours + hrs);
+    if (byDate[log.date].sessions === 0) {
+      byDate[log.date].sessions += 1;
+    }
+  }
+
+  const resolved = {};
+  for (const [dStr, info] of Object.entries(byDate)) {
+    resolved[dStr] = {
+      hours: roundTwo(Math.max(info.chunkHours, info.logHours)),
+      sessions: info.sessions,
+    };
+  }
+  return resolved;
+}
+
+function renderActivityHeatmap() {
+  const gridEl = document.getElementById('stats-activity-heatmap');
+  const monthsEl = document.getElementById('stats-heatmap-months');
+  const activeDaysPill = document.getElementById('heatmap-active-days-pill');
+  const totalHoursPill = document.getElementById('heatmap-total-hours-pill');
+  const readoutEl = document.getElementById('heatmap-hover-readout');
+  if (!gridEl || !monthsEl) return;
+
+  const todayStr = getTodayStr();
+  const currentMonday = getMondayOfWeek(todayStr);
+  const WEEKS_TO_SHOW = 26;
+  const startMonday = addDays(currentMonday, -(WEEKS_TO_SHOW - 1) * 7);
+  const dailyMap = getDailyLoggedBreakdownMap();
+
+  let activeDaysCount = 0;
+  let windowTotalHours = 0;
+  const weekColsHtml = [];
+  const monthLabelsHtml = [];
+  let lastMonthSeen = -1;
+
+  for (let w = 0; w < WEEKS_TO_SHOW; w++) {
+    const weekMondayStr = addDays(startMonday, w * 7);
+    const weekMondayDt = parseDateLocal(weekMondayStr);
+    const monthIdx = weekMondayDt.getMonth();
+
+    if (monthIdx !== lastMonthSeen) {
+      const mShort = weekMondayDt.toLocaleDateString('en-US', { month: 'short' });
+      monthLabelsHtml.push(`<span class="heatmap-month-label">${mShort}</span>`);
+      lastMonthSeen = monthIdx;
+    } else {
+      monthLabelsHtml.push(`<span class="heatmap-month-label"></span>`);
+    }
+
+    const cellsHtml = [];
+    for (let d = 0; d < 7; d++) {
+      const dStr = addDays(weekMondayStr, d);
+      const isFuture = dStr > todayStr;
+      const isToday = dStr === todayStr;
+      const entry = dailyMap[dStr];
+      const hrs = !isFuture && entry ? entry.hours : 0;
+      const sessions = !isFuture && entry ? entry.sessions : 0;
+
+      if (!isFuture && hrs > 0) {
+        activeDaysCount += 1;
+        windowTotalHours = roundTwo(windowTotalHours + hrs);
+      }
+
+      const level = isFuture ? 0 : getHeatmapLevel(hrs);
+      const humanDate = formatHumanDate(dStr, true);
+      const tooltip = isFuture
+        ? `${humanDate}: Upcoming`
+        : hrs > 0
+        ? `${humanDate}: ${formatHours(hrs)} logged (${sessions} session${sessions === 1 ? '' : 's'})`
+        : `${humanDate}: 0.0h logged`;
+
+      cellsHtml.push(`
+        <span
+          class="heatmap-cell level-${level} ${isFuture ? 'is-future' : ''} ${isToday ? 'is-today' : ''}"
+          data-heatmap-date="${dStr}"
+          data-heatmap-hours="${hrs}"
+          data-heatmap-sessions="${sessions}"
+          data-heatmap-future="${isFuture ? '1' : '0'}"
+          title="${escapeHtml(tooltip)}"
+          role="gridcell"
+          aria-label="${escapeHtml(tooltip)}"
+        ></span>
+      `);
+    }
+
+    weekColsHtml.push(`<div class="heatmap-week-col">${cellsHtml.join('')}</div>`);
+  }
+
+  monthsEl.innerHTML = monthLabelsHtml.join('');
+  gridEl.innerHTML = weekColsHtml.join('');
+
+  if (activeDaysPill) {
+    activeDaysPill.textContent = `${activeDaysCount} active day${activeDaysCount === 1 ? '' : 's'}`;
+  }
+  if (totalHoursPill) {
+    totalHoursPill.textContent = `${formatHours(windowTotalHours)} logged (26w)`;
+  }
+  if (readoutEl) {
+    const todayHours = dailyMap[todayStr]?.hours || 0;
+    readoutEl.textContent = `Today (${formatHumanDate(todayStr)}): ${formatHours(todayHours)} logged • Hover any square for details`;
+  }
+}
+
 function renderStatsView() {
   const todayStr = getTodayStr();
 
@@ -1010,6 +1163,8 @@ function renderStatsView() {
   }
   document.getElementById('kpi-streak-val').textContent = `${Math.max(1, streak)}d streak`;
   document.getElementById('kpi-streak-sub').textContent = `${totalLoggedHours}h total logged focus`;
+
+  renderActivityHeatmap();
 
   const completedChunks = state.chunks.filter((c) => c.status === 'completed');
   document.getElementById('kpi-throughput-val').textContent = `${completedChunks.length} sessions done`;

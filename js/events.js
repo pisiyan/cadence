@@ -14,30 +14,49 @@ function populateHabitProjectSelect() {
   }
 }
 
+function setHabitFormDurationMode(hasDuration) {
+  const hiddenEl = document.getElementById('habit-has-duration-input');
+  if (hiddenEl) hiddenEl.value = hasDuration ? 'true' : 'false';
+  const btnCheck = document.getElementById('btn-habit-mode-checklist');
+  const btnTimed = document.getElementById('btn-habit-mode-timed');
+  if (btnCheck) btnCheck.classList.toggle('active', !hasDuration);
+  if (btnTimed) btnTimed.classList.toggle('active', hasDuration);
+
+  const freqSelect = document.getElementById('habit-freq-input');
+  const timelessOpt = document.getElementById('habit-freq-opt-timeless');
+  if (timelessOpt) {
+    timelessOpt.disabled = hasDuration;
+    timelessOpt.style.display = hasDuration ? 'none' : '';
+  }
+  if (hasDuration && freqSelect && freqSelect.value === 'timeless') {
+    freqSelect.value = 'daily';
+  }
+  syncHabitFormUI();
+}
+
 function syncHabitFormUI() {
   populateHabitProjectSelect();
+  const hasDuration = document.getElementById('habit-has-duration-input')?.value === 'true';
   const freq = document.getElementById('habit-freq-input')?.value || 'daily';
-  const consumesEl = document.getElementById('habit-consumes-input');
   const isTimeless = freq === 'timeless';
 
-  const consumes = !isTimeless && Boolean(consumesEl?.checked);
   const durWrap = document.getElementById('habit-duration-wrap');
+  const durInput = document.getElementById('habit-duration-input');
   const cycleRow = document.getElementById('habit-cycle-options-row');
   const intervalWrap = document.getElementById('habit-interval-wrap');
   const intervalLabel = document.getElementById('habit-interval-label');
   const domWrap = document.getElementById('habit-dom-wrap');
   const weekdaysWrap = document.getElementById('habit-weekdays-wrap');
-  const taskMetaRow = document.getElementById('habit-task-meta-row');
-  const consumesWrap = document.getElementById('habit-consumes-wrap');
+  const prioWrap = document.getElementById('habit-priority-wrap');
 
-  if (durWrap) durWrap.style.display = isTimeless ? 'none' : 'flex';
-  if (consumesWrap) consumesWrap.style.display = isTimeless ? 'none' : 'inline-flex';
-  if (taskMetaRow) taskMetaRow.style.display = 'grid';
+  if (durWrap) durWrap.style.display = hasDuration ? 'flex' : 'none';
+  if (durInput) durInput.required = hasDuration;
+  if (prioWrap) prioWrap.style.display = hasDuration ? 'flex' : 'none';
 
   if (cycleRow) cycleRow.style.display = isTimeless ? 'none' : 'grid';
   if (intervalWrap) intervalWrap.style.display = isTimeless ? 'none' : 'flex';
-  if (domWrap) domWrap.style.display = freq === 'monthly' ? 'flex' : 'none';
-  if (weekdaysWrap) weekdaysWrap.style.display = freq === 'weekly' ? 'flex' : 'none';
+  if (domWrap) domWrap.style.display = !isTimeless && freq === 'monthly' ? 'flex' : 'none';
+  if (weekdaysWrap) weekdaysWrap.style.display = !isTimeless && freq === 'weekly' ? 'flex' : 'none';
 
   if (intervalLabel) {
     if (freq === 'daily' || freq === 'custom') intervalLabel.textContent = 'Every N Days';
@@ -48,6 +67,7 @@ function syncHabitFormUI() {
 
 function openHabitEditor(habit) {
   populateHabitProjectSelect();
+  const timed = habitHasDuration(habit);
   document.getElementById('habit-edit-id').value = habit.id;
   document.getElementById('habit-title-input').value = habit.title;
   document.getElementById('habit-freq-input').value = habit.frequency || 'daily';
@@ -56,14 +76,13 @@ function openHabitEditor(habit) {
   document.getElementById('habit-dom-input').value = habit.dayOfMonth || 1;
   document.getElementById('habit-project-input').value = habit.projectId || state.projects[0]?.id || '';
   document.getElementById('habit-priority-input').value = habit.priority || 'P2';
-  document.getElementById('habit-consumes-input').checked = Boolean(habit.consumesCapacity);
 
   const selectedDays = Array.isArray(habit.daysOfWeek) ? habit.daysOfWeek : [parseDateLocal(getTodayStr()).getDay()];
   document.querySelectorAll('#habit-weekdays-picker input[type="checkbox"]').forEach((cb) => {
     cb.checked = selectedDays.includes(Number(cb.value));
   });
 
-  syncHabitFormUI();
+  setHabitFormDurationMode(timed);
   document.getElementById('form-add-habit').style.display = 'block';
 }
 
@@ -224,8 +243,26 @@ function setupEventListeners() {
     const chunkId = document.getElementById('edit-chunk-id').value;
     const chunk = state.chunks.find((c) => c.id === chunkId);
     if (!chunk) return;
+    const prevDate = chunk.date;
     const newDate = document.getElementById('edit-chunk-date').value;
     const newDur = Math.max(0.25, roundTwo(Number(document.getElementById('edit-chunk-duration').value) || 0.5));
+    const isHab = isChunkHabit(chunk);
+
+    if (isHab && prevDate !== newDate) {
+      if (!chunk.originalCycleDate) {
+        chunk.originalCycleDate = prevDate;
+      }
+      const task = state.tasks.find((t) => t.id === chunk.taskId);
+      const habId = chunk.habitId || (task && task.habitId);
+      const habit = state.habits.find((h) => h.id === habId);
+      if (habit) {
+        if (!habit.skippedDates || typeof habit.skippedDates !== 'object') {
+          habit.skippedDates = {};
+        }
+        habit.skippedDates[prevDate] = true;
+        delete habit.skippedDates[newDate];
+      }
+    }
 
     chunk.date = newDate;
     chunk.durationHours = newDur;
@@ -237,7 +274,11 @@ function setupEventListeners() {
     closeModal('modal-edit-chunk');
     runChunkingEngine();
     renderAll();
-    showToast(`Session updated (${formatMinutesOrHours(newDur)} on ${formatHumanDate(newDate)}).`);
+    showToast(
+      prevDate !== newDate
+        ? `Moved session to ${formatHumanDate(newDate)} (${formatMinutesOrHours(newDur)}).`
+        : `Session updated (${formatMinutesOrHours(newDur)} on ${formatHumanDate(newDate)}).`
+    );
   });
 
   document.getElementById('btn-edit-chunk-open-task').addEventListener('click', () => {
@@ -265,23 +306,26 @@ function setupEventListeners() {
     const chunkId = document.getElementById('edit-chunk-id').value;
     const chunk = state.chunks.find((c) => c.id === chunkId);
     closeModal('modal-edit-chunk');
-    if (chunk) deleteTaskById(chunk.taskId);
+    if (!chunk) return;
+    const task = state.tasks.find((t) => t.id === chunk.taskId);
+    if (isChunkHabit(chunk)) {
+      const habId = chunk.habitId || (task && task.habitId);
+      if (habId) {
+        state.habits = state.habits.filter((item) => item.id !== habId);
+        state.chunks = state.chunks.filter((c) => c.habitId !== habId && c.taskId !== getHabitTaskId(habId));
+        runChunkingEngine();
+        renderAll();
+        showToast(`Deleted habit "${task ? task.title : 'Habit'}".`);
+        return;
+      }
+    }
+    deleteTaskById(chunk.taskId);
   });
 
   document.getElementById('btn-delete-chunk-only').addEventListener('click', () => {
     const chunkId = document.getElementById('edit-chunk-id').value;
-    const chunk = state.chunks.find((c) => c.id === chunkId);
     closeModal('modal-edit-chunk');
-    if (!chunk) return;
-    const task = state.tasks.find((t) => t.id === chunk.taskId);
-    if (task && !isHabitTask(task) && chunk.status !== 'completed') {
-      task.remainingHours = Math.max(0, roundTwo(task.remainingHours - chunk.durationHours));
-      if (task.remainingHours <= 0) task.completed = true;
-    }
-    state.chunks = state.chunks.filter((c) => c.id !== chunkId);
-    runChunkingEngine();
-    renderAll();
-    showToast('Session removed.');
+    if (chunkId) deleteSingleChunkById(chunkId);
   });
 
   document.getElementById('btn-edit-chunk-checkin').addEventListener('click', () => {
@@ -496,28 +540,33 @@ function setupEventListeners() {
     });
   });
 
+  document.getElementById('btn-habit-mode-checklist').addEventListener('click', () => {
+    setHabitFormDurationMode(false);
+  });
+  document.getElementById('btn-habit-mode-timed').addEventListener('click', () => {
+    setHabitFormDurationMode(true);
+  });
+
   document.getElementById('habit-freq-input').addEventListener('change', syncHabitFormUI);
-  document.getElementById('habit-consumes-input').addEventListener('change', syncHabitFormUI);
 
   document.getElementById('btn-toggle-add-habit').addEventListener('click', () => {
     const form = document.getElementById('form-add-habit');
     populateHabitProjectSelect();
     document.getElementById('habit-edit-id').value = '';
     document.getElementById('habit-title-input').value = '';
-    const activeTab = state.activeHabitTab || 'daily';
-    document.getElementById('habit-freq-input').value = activeTab;
+    const defaultTimed = state.activeHabitTab === 'timed';
+    document.getElementById('habit-freq-input').value = 'daily';
     document.getElementById('habit-duration-input').value = '30';
     document.getElementById('habit-interval-input').value = '1';
     document.getElementById('habit-dom-input').value = '1';
     document.getElementById('habit-priority-input').value = 'P2';
-    document.getElementById('habit-consumes-input').checked = activeTab !== 'timeless';
 
     const todayDow = parseDateLocal(getTodayStr()).getDay();
     document.querySelectorAll('#habit-weekdays-picker input[type="checkbox"]').forEach((cb) => {
       cb.checked = Number(cb.value) === todayDow;
     });
 
-    syncHabitFormUI();
+    setHabitFormDurationMode(defaultTimed);
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
   });
 
@@ -529,13 +578,15 @@ function setupEventListeners() {
     e.preventDefault();
     const editId = document.getElementById('habit-edit-id').value;
     const title = document.getElementById('habit-title-input').value.trim();
-    const frequency = document.getElementById('habit-freq-input').value;
-    const durationMins = Number(document.getElementById('habit-duration-input').value) || 30;
+    const hasDuration = document.getElementById('habit-has-duration-input').value === 'true';
+    const rawFreq = document.getElementById('habit-freq-input').value;
+    const frequency = hasDuration && rawFreq === 'timeless' ? 'daily' : rawFreq;
+    const durationMins = hasDuration ? Math.max(5, Number(document.getElementById('habit-duration-input').value) || 30) : null;
     const intervalCount = Math.max(1, Number(document.getElementById('habit-interval-input').value) || 1);
     const dayOfMonth = Math.max(1, Math.min(31, Number(document.getElementById('habit-dom-input').value) || 1));
     const projectId = document.getElementById('habit-project-input').value || state.projects[0]?.id;
     const priority = document.getElementById('habit-priority-input').value || 'P2';
-    const consumesCapacity = frequency === 'timeless' ? false : document.getElementById('habit-consumes-input').checked;
+    const consumesCapacity = Boolean(hasDuration && frequency !== 'timeless');
 
     const daysOfWeek = [];
     document.querySelectorAll('#habit-weekdays-picker input[type="checkbox"]:checked').forEach((cb) => {
@@ -552,6 +603,7 @@ function setupEventListeners() {
       if (existing) {
         existing.title = title;
         existing.frequency = frequency;
+        existing.hasDuration = hasDuration;
         existing.durationMins = durationMins;
         existing.intervalCount = intervalCount;
         existing.dayOfMonth = dayOfMonth;
@@ -567,6 +619,7 @@ function setupEventListeners() {
         id: uid('hab'),
         title,
         frequency,
+        hasDuration,
         durationMins,
         intervalCount,
         dayOfMonth,
@@ -577,10 +630,14 @@ function setupEventListeners() {
         anchorDate: getTodayStr(),
         completedPeriods: {},
       });
-      showToast(`Added "${title}".`);
+      showToast(
+        hasDuration
+          ? `Added timed habit "${title}" (${durationMins}m scheduled sessions).`
+          : `Added "${title}" to side checklist.`
+      );
     }
 
-    state.activeHabitTab = frequency;
+    state.activeHabitTab = hasDuration ? 'timed' : 'checklist';
     document.getElementById('habit-edit-id').value = '';
     document.getElementById('habit-title-input').value = '';
     document.getElementById('form-add-habit').style.display = 'none';
@@ -751,6 +808,25 @@ function setupEventListeners() {
     }
   });
 
+  document.body.addEventListener('mouseover', (e) => {
+    const cell = e.target.closest('[data-heatmap-date]');
+    if (!cell) return;
+    const readoutEl = document.getElementById('heatmap-hover-readout');
+    if (!readoutEl) return;
+    const dStr = cell.dataset.heatmapDate;
+    const hrs = Number(cell.dataset.heatmapHours) || 0;
+    const sessions = Number(cell.dataset.heatmapSessions) || 0;
+    const isFuture = cell.dataset.heatmapFuture === '1';
+
+    if (isFuture) {
+      readoutEl.textContent = `${formatHumanDate(dStr, true)} — Upcoming day`;
+    } else if (hrs > 0) {
+      readoutEl.textContent = `${formatHumanDate(dStr, true)} — ${formatHours(hrs)} logged across ${sessions} session${sessions === 1 ? '' : 's'}`;
+    } else {
+      readoutEl.textContent = `${formatHumanDate(dStr, true)} — 0.0h logged (No sessions completed)`;
+    }
+  });
+
   document.body.addEventListener('click', (e) => {
     const actionEl = e.target.closest('[data-action]');
     if (!actionEl) return;
@@ -764,6 +840,8 @@ function setupEventListeners() {
       openTaskModal(null, actionEl.dataset.taskId);
     } else if (action === 'open-edit-chunk') {
       openEditChunkModal(actionEl.dataset.chunkId);
+    } else if (action === 'delete-chunk-only') {
+      deleteSingleChunkById(actionEl.dataset.chunkId);
     } else if (action === 'quick-focus-intensity') {
       const newIntensity = Math.max(0, Math.min(100, Number(actionEl.dataset.intensity) || 0));
       const deadline = actionEl.dataset.deadline;
@@ -824,14 +902,22 @@ function setupEventListeners() {
       deleteTaskById(actionEl.dataset.taskId);
     } else if (action === 'toggle-habit-capacity') {
       const h = state.habits.find((item) => item.id === actionEl.dataset.habitId);
-      if (h && h.frequency !== 'timeless') {
-        h.consumesCapacity = !h.consumesCapacity;
+      if (h) {
+        const nextTimed = !habitHasDuration(h);
+        h.hasDuration = nextTimed;
+        if (nextTimed) {
+          if (h.frequency === 'timeless') h.frequency = 'daily';
+          if (!h.durationMins || h.durationMins < 5) h.durationMins = 30;
+          h.consumesCapacity = true;
+        } else {
+          h.consumesCapacity = false;
+        }
         runChunkingEngine();
         renderAll();
         showToast(
-          h.consumesCapacity
-            ? `"${h.title}" now creates scheduled task sessions (${roundTwo(h.durationMins / 60)}h).`
-            : `"${h.title}" set to passive checklist.`
+          nextTimed
+            ? `"${h.title}" now has a ${h.durationMins}m duration and schedules into tasks.`
+            : `"${h.title}" set to no duration (side checklist only).`
         );
       }
     } else if (action === 'edit-habit') {

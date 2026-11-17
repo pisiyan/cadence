@@ -204,6 +204,7 @@ function createDefaultState() {
       title: 'Review Lecture & Sprint Notes',
       frequency: 'daily',
       intervalCount: 1,
+      hasDuration: true,
       durationMins: 30,
       consumesCapacity: true,
       projectId: 'proj_work_school',
@@ -213,9 +214,10 @@ function createDefaultState() {
     {
       id: 'hab_2',
       title: 'Inbox & Deadline Triage',
-      frequency: 'timeless',
+      frequency: 'daily',
       intervalCount: 1,
-      durationMins: 15,
+      hasDuration: false,
+      durationMins: null,
       consumesCapacity: false,
       projectId: 'proj_work_school',
       priority: 'P3',
@@ -227,6 +229,7 @@ function createDefaultState() {
       frequency: 'weekly',
       intervalCount: 1,
       daysOfWeek: [parseDateLocal(today).getDay()],
+      hasDuration: true,
       durationMins: 30,
       consumesCapacity: true,
       projectId: 'proj_work_school',
@@ -235,11 +238,24 @@ function createDefaultState() {
     },
     {
       id: 'hab_4',
-      title: 'Monthly Goal Retrospective',
-      frequency: 'monthly',
+      title: 'Submit Weekly Timesheet / Attendance',
+      frequency: 'weekly',
       intervalCount: 1,
-      dayOfMonth: 1,
-      durationMins: 45,
+      daysOfWeek: [parseDateLocal(today).getDay()],
+      hasDuration: false,
+      durationMins: null,
+      consumesCapacity: false,
+      projectId: 'proj_work_school',
+      priority: 'P2',
+      completedPeriods: {},
+    },
+    {
+      id: 'hab_5',
+      title: 'Back Up Local Project Repos',
+      frequency: 'timeless',
+      intervalCount: 1,
+      hasDuration: false,
+      durationMins: null,
       consumesCapacity: false,
       projectId: 'proj_work_school',
       priority: 'P3',
@@ -248,6 +264,56 @@ function createDefaultState() {
   ];
 
   const logs = [
+    {
+      id: 'log_hist_14',
+      taskId: 'task_5',
+      chunkId: 'chk_seed_14',
+      date: addDays(today, -14),
+      loggedHours: 4.5,
+      plannedHours: 4.5,
+      priority: 'P1',
+      timestamp: `${addDays(today, -14)}T17:00:00.000Z`,
+    },
+    {
+      id: 'log_hist_12',
+      taskId: 'task_1',
+      chunkId: 'chk_seed_12',
+      date: addDays(today, -12),
+      loggedHours: 2.25,
+      plannedHours: 2.5,
+      priority: 'P1',
+      timestamp: `${addDays(today, -12)}T16:00:00.000Z`,
+    },
+    {
+      id: 'log_hist_10',
+      taskId: 'task_2',
+      chunkId: 'chk_seed_10',
+      date: addDays(today, -10),
+      loggedHours: 3.5,
+      plannedHours: 3.5,
+      priority: 'P2',
+      timestamp: `${addDays(today, -10)}T15:30:00.000Z`,
+    },
+    {
+      id: 'log_hist_8',
+      taskId: 'task_3',
+      chunkId: 'chk_seed_8',
+      date: addDays(today, -8),
+      loggedHours: 1.0,
+      plannedHours: 1.5,
+      priority: 'P3',
+      timestamp: `${addDays(today, -8)}T13:00:00.000Z`,
+    },
+    {
+      id: 'log_hist_7',
+      taskId: 'task_1',
+      chunkId: 'chk_seed_7',
+      date: addDays(today, -7),
+      loggedHours: 4.75,
+      plannedHours: 4.5,
+      priority: 'P1',
+      timestamp: `${addDays(today, -7)}T18:00:00.000Z`,
+    },
     {
       id: 'log_1',
       taskId: 'task_5',
@@ -304,7 +370,7 @@ function createDefaultState() {
     theme: 'light',
     activeView: 'today',
     selectedProjectFilter: 'ALL',
-    activeHabitTab: 'daily',
+    activeHabitTab: 'checklist',
     forecastWeeks: 2,
     distributionStrategy: 'asap',
     focusPeriod: {
@@ -432,12 +498,23 @@ function loadState() {
       if (!Array.isArray(loaded.habits)) {
         loaded.habits = [];
       }
+      if (!['checklist', 'timed', 'all'].includes(loaded.activeHabitTab)) {
+        loaded.activeHabitTab = 'checklist';
+      }
       const defaultProjId = loaded.projects?.[0]?.id || 'proj_work_school';
       for (const h of loaded.habits) {
         if (!h.completedPeriods) h.completedPeriods = {};
+        if (!h.skippedDates || typeof h.skippedDates !== 'object') h.skippedDates = {};
         if (!h.intervalCount || h.intervalCount < 1) h.intervalCount = 1;
         if (!h.projectId) h.projectId = defaultProjId;
         if (!h.priority) h.priority = 'P2';
+        if (typeof h.hasDuration !== 'boolean') {
+          h.hasDuration = Boolean(h.consumesCapacity && h.frequency !== 'timeless');
+        }
+        h.consumesCapacity = Boolean(h.hasDuration && h.frequency !== 'timeless');
+        if (h.hasDuration && (!h.durationMins || h.durationMins < 5)) {
+          h.durationMins = 30;
+        }
         if (h.frequency === 'weekly' && !Array.isArray(h.daysOfWeek)) {
           h.daysOfWeek = [parseDateLocal(getTodayStr()).getDay()];
         }
